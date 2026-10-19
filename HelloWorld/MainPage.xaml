@@ -1,40 +1,43 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-
 <ContentPage
- x:Class="HelloWorld.MainPage"
- xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
- xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+    x:Class="HelloWorld.MainPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="14">
+            <Label Text="Incoming Call Capture"
+                   FontSize="28"
+                   FontAttributes="Bold" />
 
-<VerticalStackLayout
-    Padding="30"
-    Spacing="20"
-    VerticalOptions="Center">
+            <Label Text="Enable call screening in Android settings to capture eligible incoming calls." />
 
-    <Label
-        Text="Hello, World!"
-        FontSize="36"
-        FontAttributes="Bold"
-        HorizontalOptions="Center" />
+            <Button Text="Enable Call Screening"
+                    Clicked="OnEnableCallScreeningClicked" />
 
-    <Label
-        Text="My first .NET MAUI Android app"
-        FontSize="18"
-        HorizontalOptions="Center" />
+            <Label Text="Backend configuration"
+                   FontSize="20"
+                   FontAttributes="Bold" />
 
-    <Button
-        Text="Say Hello"
-        FontSize="18"
-        HorizontalOptions="Center"
-        Clicked="OnHelloClicked" />
+            <Entry x:Name="ApiUrlEntry"
+                   Placeholder="HTTPS API URL, e.g. https://your-api.example.com"
+                   Keyboard="Url" />
 
-    <Label
-        x:Name="MessageLabel"
-        FontSize="20"
-        HorizontalOptions="Center"
-        HorizontalTextAlignment="Center" />
+            <Entry x:Name="ApiKeyEntry"
+                   Placeholder="API key"
+                   IsPassword="True" />
 
-</VerticalStackLayout>
+            <Button Text="Save Backend Settings"
+                    Clicked="OnSaveBackendClicked" />
 
+            <Button Text="Refresh Captured Calls"
+                    Clicked="OnRefreshCallsClicked" />
 
+            <Label x:Name="StatusLabel"
+                   Text="No calls loaded yet." />
+
+            <VerticalStackLayout x:Name="CallsLayout"
+                                 Spacing="10" />
+        </VerticalStackLayout>
+    </ScrollView>
 </ContentPage>
