@@ -1,7 +1,7 @@
 
-using System.Text.Json;
 using global::Android.App;
 using global::Android.Content;
+using global::Android.OS;
 using global::Android.Telecom;
 
 namespace HelloWorld.Platforms.Android;
@@ -15,9 +15,18 @@ public class IncomingCallScreeningService : CallScreeningService
 {
     public override void OnScreenCall(Call.Details callDetails)
     {
+        // This app's call-screening role is available on Android 10+.
+        if (Build.VERSION.SdkInt < BuildVersionCodes.Q)
+            return;
+
+        // This app only stores incoming calls, not outgoing calls.
+        if (callDetails.CallDirection != CallDirection.Incoming)
+            return;
+
         try
         {
-            var response = new CallScreeningService.CallResponse.Builder()
+            // Respond immediately so normal incoming calls can ring.
+            var response = new CallResponse.Builder()
                 .SetDisallowCall(false)
                 .SetRejectCall(false)
                 .SetSilenceCall(false)
@@ -27,52 +36,34 @@ public class IncomingCallScreeningService : CallScreeningService
 
             RespondToCall(callDetails, response);
 
-            // GetHandle() avoids confusing the Android URI handle
-            // with the Java object's Handle property.
             var handle = callDetails.GetHandle();
             var number = handle?.SchemeSpecificPart;
 
             if (string.IsNullOrWhiteSpace(number))
-                return;
-
-            _ = Task.Run(async () =>
             {
-                try
-                {
-                    var record = new CallRecord
-                    {
-                        PhoneNumber = number,
-                        CapturedAtUtc = DateTimeOffset.UtcNow
-                    };
+                global::Android.Util.Log.Info(
+                    "CallCapture",
+                    "Incoming call did not provide a caller number.");
+                return;
+            }
 
-                    var json =
-                        global::Microsoft.Maui.Storage.Preferences.Default
-                            .Get("CapturedCalls", "[]");
+            var record = new CallRecord
+            {
+                PhoneNumber = number,
+                CapturedAtUtc = DateTimeOffset.UtcNow
+            };
 
-                    var calls =
-                        JsonSerializer.Deserialize<List<CallRecord>>(json)
-                        ?? new List<CallRecord>();
+            CallStorage.Save(record);
 
-                    calls.Insert(0, record);
-
-                    global::Microsoft.Maui.Storage.Preferences.Default.Set(
-                        "CapturedCalls",
-                        JsonSerializer.Serialize(
-                            calls.Take(200).ToList()));
-
-                    await CallUploader.TryUploadAsync(record);
-                }
-                catch (Exception ex)
-                {
-                    global::Android.Util.Log.Error(
-                        "CallCapture", ex.ToString());
-                }
-            });
+            global::Android.Util.Log.Info(
+                "CallCapture",
+                $"Captured incoming number: {number}");
         }
         catch (Exception ex)
         {
             global::Android.Util.Log.Error(
-                "CallCapture", ex.ToString());
+                "CallCapture",
+                $"Failed to capture incoming call: {ex}");
         }
     }
 }

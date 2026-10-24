@@ -1,43 +1,53 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage
     x:Class="HelloWorld.MainPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
     <ScrollView>
-        <VerticalStackLayout Padding="24" Spacing="14">
-            <Label Text="Incoming Call Capture"
-                   FontSize="28"
-                   FontAttributes="Bold" />
+        <VerticalStackLayout Padding="24" Spacing="18">
 
-            <Label Text="Enable call screening in Android settings to capture eligible incoming calls." />
+            <Label
+                Text="Incoming Call Capture"
+                FontSize="28"
+                FontAttributes="Bold" />
 
-            <Button Text="Enable Call Screening"
-                    Clicked="OnEnableCallScreeningClicked" />
+            <Label
+                Text="This app stores incoming caller numbers locally on this phone."
+                FontSize="16" />
 
-            <Label Text="Backend configuration"
-                   FontSize="20"
-                   FontAttributes="Bold" />
+            <Button
+                Text="Enable Call Capture"
+                Clicked="OnEnableCallScreeningClicked" />
 
-            <Entry x:Name="ApiUrlEntry"
-                   Placeholder="HTTPS API URL, e.g. https://your-api.example.com"
-                   Keyboard="Url" />
+            <Label
+                x:Name="StatusLabel"
+                Text="Call screening has not been checked yet."
+                FontSize="14" />
 
-            <Entry x:Name="ApiKeyEntry"
-                   Placeholder="API key"
-                   IsPassword="True" />
+            <Label
+                Text="Latest caller"
+                FontSize="20"
+                FontAttributes="Bold" />
 
-            <Button Text="Save Backend Settings"
-                    Clicked="OnSaveBackendClicked" />
+            <Label
+                x:Name="LatestNumberLabel"
+                Text="No caller captured yet"
+                FontSize="24"
+                FontAttributes="Bold" />
 
-            <Button Text="Refresh Captured Calls"
-                    Clicked="OnRefreshCallsClicked" />
+            <Button
+                Text="Refresh Calls"
+                Clicked="OnRefreshCallsClicked" />
 
-            <Label x:Name="StatusLabel"
-                   Text="No calls loaded yet." />
+            <Label
+                Text="Recent captured calls"
+                FontSize="20"
+                FontAttributes="Bold" />
 
-            <VerticalStackLayout x:Name="CallsLayout"
-                                 Spacing="10" />
+            <VerticalStackLayout
+                x:Name="CallsLayout"
+                Spacing="10" />
+
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

@@ -1,58 +1,42 @@
 ﻿
-using System.Text.Json;
-using Microsoft.Maui.Storage;
+using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.Controls;
 
 namespace HelloWorld;
 
 public partial class MainPage : ContentPage
 {
+    private bool _polling;
+
     public MainPage()
     {
         InitializeComponent();
     }
 
-    protected override async void OnAppearing()
+    protected override void OnAppearing()
     {
         base.OnAppearing();
 
-        try
-        {
-            ApiUrlEntry.Text =
-                await SecureStorage.Default.GetAsync("CallsApiUrl") ?? string.Empty;
+        _polling = true;
+        _ = RefreshCallsAsync();
 
-            await RefreshCallsAsync();
-        }
-        catch (Exception ex)
-        {
-            StatusLabel.Text = $"Unable to load settings: {ex.Message}";
-        }
+        // Refresh the displayed number while this page is visible.
+        Dispatcher.StartTimer(
+            TimeSpan.FromSeconds(2),
+            () =>
+            {
+                if (!_polling)
+                    return false;
+
+                _ = RefreshCallsAsync();
+                return true;
+            });
     }
 
-    private async void OnSaveBackendClicked(object? sender, EventArgs e)
+    protected override void OnDisappearing()
     {
-        var url = ApiUrlEntry.Text?.Trim();
-        var key = ApiKeyEntry.Text?.Trim();
-
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
-            uri.Scheme != Uri.UriSchemeHttps ||
-            string.IsNullOrWhiteSpace(key))
-        {
-            StatusLabel.Text = "Enter a valid HTTPS URL and API key.";
-            return;
-        }
-
-        try
-        {
-            await SecureStorage.Default.SetAsync("CallsApiUrl", url);
-            await SecureStorage.Default.SetAsync("CallsApiKey", key);
-
-            ApiKeyEntry.Text = string.Empty;
-            StatusLabel.Text = "Backend settings saved on this device.";
-        }
-        catch (Exception ex)
-        {
-            StatusLabel.Text = $"Unable to save settings: {ex.Message}";
-        }
+        _polling = false;
+        base.OnDisappearing();
     }
 
     private async void OnEnableCallScreeningClicked(
@@ -62,21 +46,55 @@ public partial class MainPage : ContentPage
         if (Android.OS.Build.VERSION.SdkInt <
             Android.OS.BuildVersionCodes.Q)
         {
-            await DisplayAlert(
-                "Unsupported Android version",
-                "Call screening requires Android 10 or later.",
-                "OK");
+            StatusLabel.Text =
+                "Call screening requires Android 10 or later.";
             return;
         }
 
         try
         {
-            var intent = new Android.Content.Intent(
-                "android.app.role.action.REQUEST_ROLE");
+            // Ask permission to read contacts. This allows Android to
+            // provide screening callbacks for saved contacts too.
+            var contactsStatus =
+                await Permissions.RequestAsync<Permissions.ContactsRead>();
 
-            intent.PutExtra(
-                "android.app.role.extra.ROLE_NAME",
-                "android.app.role.CALL_SCREENING");
+            if (contactsStatus != PermissionStatus.Granted)
+            {
+                StatusLabel.Text =
+                    "Contacts permission was not granted. Android may only " +
+                    "provide calls from numbers not saved in your contacts.";
+            }
+
+            var roleManager =
+                Android.App.Application.Context.GetSystemService(
+                    Android.Content.Context.RoleService)
+                as Android.App.Roles.RoleManager;
+
+            if (roleManager is null)
+            {
+                StatusLabel.Text =
+                    "Android's role manager is unavailable.";
+                return;
+            }
+
+            if (!roleManager.IsRoleAvailable(
+                    Android.App.Roles.RoleManager.RoleCallScreening))
+            {
+                StatusLabel.Text =
+                    "Call-screening role is unavailable on this phone.";
+                return;
+            }
+
+            if (roleManager.IsRoleHeld(
+                    Android.App.Roles.RoleManager.RoleCallScreening))
+            {
+                StatusLabel.Text =
+                    "Call screening is enabled. Make a test call.";
+                return;
+            }
+
+            var intent = roleManager.CreateRequestRoleIntent(
+                Android.App.Roles.RoleManager.RoleCallScreening);
 
             var activity =
                 Microsoft.Maui.ApplicationModel.Platform.CurrentActivity;
@@ -84,51 +102,64 @@ public partial class MainPage : ContentPage
             if (activity is null)
             {
                 StatusLabel.Text =
-                    "Unable to open Android settings. Reopen the app and try again.";
+                    "Could not open the Android permission screen. Try again.";
                 return;
             }
 
-            activity.StartActivity(intent);
+            activity.StartActivityForResult(intent, 1001);
+
+            StatusLabel.Text =
+                "Approve the call-screening request in Android.";
         }
         catch (Exception ex)
         {
             StatusLabel.Text =
-                $"Unable to request call screening: {ex.Message}";
+                $"Could not enable call screening: {ex.Message}";
         }
 #else
         await DisplayAlert(
             "Android only",
-            "Call screening is available only on Android.",
+            "Call capture is available only on Android.",
             "OK");
 #endif
     }
 
-    private async void OnRefreshCallsClicked(object? sender, EventArgs e)
+    private async void OnRefreshCallsClicked(
+        object? sender, EventArgs e)
     {
         await RefreshCallsAsync();
     }
 
     private Task RefreshCallsAsync()
     {
-        CallsLayout.Clear();
-
+#if ANDROID
         try
         {
-            var json = Preferences.Default.Get("CapturedCalls", "[]");
-
             var calls =
-                JsonSerializer.Deserialize<List<CallRecord>>(json)
-                ?? new List<CallRecord>();
+                Platforms.Android.CallStorage.Load();
 
+            CallsLayout.Clear();
+
+            if (calls.Count == 0)
+            {
+                LatestNumberLabel.Text = "No caller captured yet";
+                StatusLabel.Text =
+                    "No numbers have been captured. Enable call screening, " +
+                    "then make a test call.";
+                return Task.CompletedTask;
+            }
+
+            LatestNumberLabel.Text = calls[0].PhoneNumber;
             StatusLabel.Text =
-                $"{calls.Count} captured call(s) on this device.";
+                $"{calls.Count} call(s) stored on this phone.";
 
             foreach (var call in calls)
             {
                 CallsLayout.Add(new Label
                 {
                     Text =
-                        $"{call.PhoneNumber}\n{call.CapturedAtUtc.LocalDateTime:g}",
+                        $"{call.PhoneNumber}\n" +
+                        $"{call.CapturedAtUtc.LocalDateTime:g}",
                     FontSize = 16
                 });
 
@@ -141,8 +172,10 @@ public partial class MainPage : ContentPage
         }
         catch (Exception ex)
         {
-            StatusLabel.Text = $"Unable to load captured calls: {ex.Message}";
+            StatusLabel.Text =
+                $"Could not load captured calls: {ex.Message}";
         }
+#endif
 
         return Task.CompletedTask;
     }
