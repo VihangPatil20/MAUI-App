@@ -15,20 +15,41 @@ public class IncomingCallScreeningService : CallScreeningService
 {
     public override void OnScreenCall(Call.Details callDetails)
     {
-        // This app's call-screening role is available on Android 10+.
         if (Build.VERSION.SdkInt < BuildVersionCodes.Q)
             return;
 
-        // This app only stores incoming calls, not outgoing calls.
         if (callDetails.CallDirection != CallDirection.Incoming)
             return;
 
         try
         {
-            // Respond immediately so normal incoming calls can ring.
+            var handle = callDetails.GetHandle();
+            var number = handle?.SchemeSpecificPart;
+
+            string? series = null;
+            bool shouldBlock = false;
+
+            if (!string.IsNullOrWhiteSpace(number))
+            {
+                series =
+                    global::HelloWorld.MainPage
+                        .GetIndianFourDigitSeries(number);
+
+                if (series is not null)
+                {
+                    var decisions =
+                        global::HelloWorld.MainPage.LoadSeriesDecisions();
+
+                    shouldBlock =
+                        decisions.TryGetValue(series, out var decision)
+                        && decision == "accepted";
+                }
+            }
+
+            // Tell Android whether this call should be allowed or rejected.
             var response = new CallResponse.Builder()
-                .SetDisallowCall(false)
-                .SetRejectCall(false)
+                .SetDisallowCall(shouldBlock)
+                .SetRejectCall(shouldBlock)
                 .SetSilenceCall(false)
                 .SetSkipCallLog(false)
                 .SetSkipNotification(false)
@@ -36,34 +57,57 @@ public class IncomingCallScreeningService : CallScreeningService
 
             RespondToCall(callDetails, response);
 
-            var handle = callDetails.GetHandle();
-            var number = handle?.SchemeSpecificPart;
+            // Keep capturing incoming numbers, including blocked calls
+            // when Android provides their numbers to this service.
+            if (!string.IsNullOrWhiteSpace(number))
+            {
+                var record = new CallRecord
+                {
+                    PhoneNumber = number,
+                    CapturedAtUtc = DateTimeOffset.UtcNow
+                };
 
-            if (string.IsNullOrWhiteSpace(number))
+                CallStorage.Save(record);
+
+                global::Android.Util.Log.Info(
+                    "CallCapture",
+                    shouldBlock
+                        ? $"Blocked incoming number {number}, series {series}."
+                        : $"Allowed incoming number {number}.");
+            }
+            else
             {
                 global::Android.Util.Log.Info(
                     "CallCapture",
                     "Incoming call did not provide a caller number.");
-                return;
             }
-
-            var record = new CallRecord
-            {
-                PhoneNumber = number,
-                CapturedAtUtc = DateTimeOffset.UtcNow
-            };
-
-            CallStorage.Save(record);
-
-            global::Android.Util.Log.Info(
-                "CallCapture",
-                $"Captured incoming number: {number}");
         }
         catch (Exception ex)
         {
             global::Android.Util.Log.Error(
                 "CallCapture",
-                $"Failed to capture incoming call: {ex}");
+                $"Failed to screen incoming call: {ex}");
+
+            // If screening fails, allow the call rather than accidentally
+            // rejecting a caller because of an application error.
+            try
+            {
+                var fallbackResponse = new CallResponse.Builder()
+                    .SetDisallowCall(false)
+                    .SetRejectCall(false)
+                    .SetSilenceCall(false)
+                    .SetSkipCallLog(false)
+                    .SetSkipNotification(false)
+                    .Build();
+
+                RespondToCall(callDetails, fallbackResponse);
+            }
+            catch (Exception fallbackEx)
+            {
+                global::Android.Util.Log.Error(
+                    "CallCapture",
+                    $"Failed to send fallback call response: {fallbackEx}");
+            }
         }
     }
 }

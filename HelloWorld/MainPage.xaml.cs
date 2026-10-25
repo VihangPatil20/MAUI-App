@@ -193,7 +193,7 @@ private async Task RefreshCallsAsync()
 #endif
 }
 
-private static string? GetIndianFourDigitSeries(string? phoneNumber)
+public static string? GetIndianFourDigitSeries(string? phoneNumber)
 {
     if (string.IsNullOrWhiteSpace(phoneNumber))
         return null;
@@ -228,7 +228,7 @@ private static string? GetIndianFourDigitSeries(string? phoneNumber)
     return digits[..4];
 }
 
-private static Dictionary<string, string> LoadSeriesDecisions()
+public static Dictionary<string, string> LoadSeriesDecisions()
 {
     var json = Microsoft.Maui.Storage.Preferences.Get(
         SeriesDecisionsKey, "{}");
@@ -237,7 +237,7 @@ private static Dictionary<string, string> LoadSeriesDecisions()
            ?? new Dictionary<string, string>();
 }
 
-private static void SaveSeriesDecision(
+public static void SaveSeriesDecision(
     string series, bool wantsToBlock)
 {
     var decisions = LoadSeriesDecisions();
